@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React TV Streamer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<style>
+  @keyframes glow {
+    0%, 100% {
+      text-shadow: 0 0 5px #06b6d4, 0 0 10px #06b6d4, 0 0 15px #0891b2, 0 0 20px #0891b2;
+    }
+    50% {
+      text-shadow: 0 0 10px #06b6d4, 0 0 20px #0891b2, 0 0 30px #0891b2, 0 0 40px #0891b2;
+    }
+  }
+  .text-glow {
+    animation: glow 2.5s ease-in-out infinite;
+  }
+
+  /* Custom styles for range inputs */
+  .player-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    cursor: pointer;
+    outline: none;
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .player-range::-webkit-slider-runnable-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 9999px;
+  }
+
+  .player-range::-moz-range-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 9999px;
+  }
+
+  .player-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -5px; /* (track-height - thumb-height) / 2 */
+    background-color: #06b6d4;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    border: 2px solid white;
+  }
+  
+  .player-range:hover::-webkit-slider-thumb {
+     box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.5);
+  }
+
+  .player-range::-moz-range-thumb {
+    border: none;
+    border-radius: 50%;
+    background-color: #06b6d4;
+    height: 16px;
+    width: 16px;
+    border: 2px solid white;
+  }
+
+  .player-range:hover::-moz-range-thumb {
+     box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.5);
+  }
+
+</style>
+</head>
+  <body class="bg-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
