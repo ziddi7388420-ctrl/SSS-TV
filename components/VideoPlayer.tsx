@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, ChangeEvent, useCallback } from 'react';
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, LiveIcon, CogIcon, PictureInPictureIcon } from './Icons';
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, PauseIcon, PlayIcon, SpeakerWaveIcon, SpeakerXMarkIcon, LiveIcon, CogIcon, PictureInPictureIcon, StepBackwardIcon, StepForwardIcon } from './Icons';
 import type { Channel } from '../types';
 
 declare const Hls: any;
 
 interface VideoPlayerProps {
   channel: Channel;
+  onNextChannel: () => void;
+  onPrevChannel: () => void;
 }
 
 interface HlsLevel {
@@ -16,13 +18,12 @@ interface HlsLevel {
 const MAX_HLS_RETRIES = 5;
 const HLS_RETRY_DELAY = 1000;
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel, onNextChannel, onPrevChannel }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
   const hlsRef = useRef<any>(null);
   const retryCountRef = useRef(0);
-  const lastVolumeRef = useRef(1);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -31,7 +32,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [retryVersion, setRetryVersion] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isPiPSupported, setIsPiPSupported] = useState(false);
   const [isInPiP, setIsInPiP] = useState(false);
@@ -81,9 +81,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
 
   const toggleMute = useCallback(() => {
     if (videoRef.current) {
-      const newMutedState = !videoRef.current.muted;
-      videoRef.current.muted = newMutedState;
-      // State update is handled by the 'volumechange' event listener
+      videoRef.current.muted = !videoRef.current.muted;
     }
   }, []);
   
@@ -91,8 +89,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
     const newVolume = parseFloat(e.target.value);
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
+      if (newVolume > 0) {
+        videoRef.current.muted = false;
+      }
     }
-    // State update is handled by the 'volumechange' event listener
   };
 
   const toggleFullscreen = useCallback(() => {
@@ -202,10 +202,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
     const handlePlaying = () => setIsBuffering(false);
     const handleVolumeSync = () => {
       if (video) {
-        const currentMuted = video.muted || video.volume === 0;
-        setIsMuted(currentMuted);
+        setIsMuted(video.muted || video.volume === 0);
         setVolume(video.muted ? 0 : video.volume);
-        if(!currentMuted) lastVolumeRef.current = video.volume;
       }
     };
     
@@ -221,23 +219,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
     video.addEventListener('enterpictureinpicture', handleEnterPiP);
     video.addEventListener('leavepictureinpicture', handleLeavePiP);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    
-    const progressInterval = setInterval(() => {
-      if (video && video.buffered.length > 0 && isPlaying) {
-        const bufferEnd = video.buffered.end(video.buffered.length - 1);
-        const liveEdge = bufferEnd - 5;
-        if (video.currentTime < liveEdge && video.currentTime > 0) {
-            video.currentTime = liveEdge;
-        }
-        const bufferStart = video.buffered.start(video.buffered.length - 1);
-        const duration = bufferEnd - bufferStart;
-        if (duration > 0) {
-          setProgress(((video.currentTime - bufferStart) / duration) * 100);
-        } else {
-          setProgress(0);
-        }
-      }
-    }, 1000);
 
     return () => {
       video.removeEventListener('play', handlePlay);
@@ -248,9 +229,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
       video.removeEventListener('enterpictureinpicture', handleEnterPiP);
       video.removeEventListener('leavepictureinpicture', handleLeavePiP);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      clearInterval(progressInterval);
     };
-  }, [isPlaying, isSettingsMenuOpen]);
+  }, [isSettingsMenuOpen]);
 
   const changeVolume = useCallback((delta: number) => {
     if (videoRef.current) {
@@ -271,13 +251,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
             case 'Space': e.preventDefault(); togglePlayPause(); break;
             case 'KeyM': e.preventDefault(); toggleMute(); break;
             case 'KeyF': e.preventDefault(); toggleFullscreen(); break;
-            case 'ArrowUp': case 'ArrowRight': e.preventDefault(); changeVolume(0.05); break;
-            case 'ArrowDown': case 'ArrowLeft': e.preventDefault(); changeVolume(-0.05); break;
+            case 'ArrowUp': e.preventDefault(); changeVolume(0.05); break;
+            case 'ArrowDown': e.preventDefault(); changeVolume(-0.05); break;
+            case 'ArrowRight': e.preventDefault(); onNextChannel(); break;
+            case 'ArrowLeft': e.preventDefault(); onPrevChannel(); break;
         }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlayPause, toggleMute, toggleFullscreen, changeVolume]);
+  }, [togglePlayPause, toggleMute, toggleFullscreen, changeVolume, onNextChannel, onPrevChannel]);
   
   return (
     <div
@@ -286,6 +268,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
       onMouseMove={showControls}
       onMouseLeave={hideControls}
       onClick={togglePlayPause}
+      onDoubleClick={toggleFullscreen}
     >
       <video ref={videoRef} className="w-full h-full" playsInline autoPlay />
 
@@ -329,51 +312,56 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
         </div>
         
         {/* Bottom Controls */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 bg-gradient-to-t from-black/70 to-transparent">
-          <div className="relative w-full mb-2">
-            <div className="absolute w-full h-1.5 top-1/2 -translate-y-1/2 bg-white/20 rounded-full">
-               <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${progress}%` }}></div>
-            </div>
-          </div>
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 bg-gradient-to-t from-black/70 to-transparent">
           <div className="flex items-center justify-between text-white">
             {/* Left Controls */}
-            <div className="flex items-center gap-4">
-              <button onClick={togglePlayPause} className="hover:text-cyan-400 transition-colors" aria-label={isPlaying ? "Pause" : "Play"}>
-                {isPlaying ? <PauseIcon className="w-8 h-8" /> : <PlayIcon className="w-8 h-8" />}
+            <div className="flex items-center gap-2" style={{width: '150px'}}>
+              <button onClick={e => {e.stopPropagation(); toggleMute();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label={isMuted ? "Unmute" : "Mute"}>
+                {isMuted || volume === 0 ? <SpeakerXMarkIcon className="w-6 h-6" /> : <SpeakerWaveIcon className="w-6 h-6" />}
               </button>
-              <div className="flex items-center group/volume gap-2">
-                <button onClick={toggleMute} className="hover:text-cyan-400 transition-colors" aria-label={isMuted ? "Unmute" : "Mute"}>
-                  {isMuted || volume === 0 ? <SpeakerXMarkIcon className="w-7 h-7" /> : <SpeakerWaveIcon className="w-7 h-7" />}
-                </button>
-                <div className="w-0 group-hover/volume:w-24 transition-all duration-300">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    className="player-range h-1.5 w-full"
-                    aria-label="Volume"
-                  />
-                </div>
+              <div className="w-24">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={volume}
+                  onChange={handleVolumeChange}
+                  className="player-range h-1.5 w-full"
+                  aria-label="Volume"
+                  onClick={e => e.stopPropagation()}
+                />
               </div>
             </div>
-            {/* Right Controls */}
+
+            {/* Center Controls */}
             <div className="flex items-center gap-4">
+               <button onClick={e => {e.stopPropagation(); onPrevChannel();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label="Previous Channel">
+                <StepBackwardIcon className="w-8 h-8" />
+              </button>
+              <button onClick={e => {e.stopPropagation(); togglePlayPause();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label={isPlaying ? "Pause" : "Play"}>
+                {isPlaying ? <PauseIcon className="w-10 h-10" /> : <PlayIcon className="w-10 h-10" />}
+              </button>
+               <button onClick={e => {e.stopPropagation(); onNextChannel();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label="Next Channel">
+                <StepForwardIcon className="w-8 h-8" />
+              </button>
+            </div>
+
+            {/* Right Controls */}
+            <div className="flex items-center justify-end gap-2" style={{width: '150px'}}>
               <div className="relative">
                 {isSettingsMenuOpen && hlsLevels.length > 0 && (
                   <div className="absolute bottom-full right-0 mb-4 bg-black/80 backdrop-blur-sm rounded-lg p-2 text-sm w-32">
                     <h4 className="text-gray-400 text-xs font-bold px-2 pb-1 uppercase">Quality</h4>
                     <ul>
                       <li key="auto">
-                        <button onClick={() => handleQualityChange(-1)} className={`w-full text-left px-2 py-1.5 rounded-md hover:bg-white/10 ${currentHlsLevelIndex === -1 ? 'font-bold text-cyan-400' : ''}`}>
+                        <button onClick={(e) => { e.stopPropagation(); handleQualityChange(-1); }} className={`w-full text-left px-2 py-1.5 rounded-md hover:bg-white/10 ${currentHlsLevelIndex === -1 ? 'font-bold text-cyan-400' : ''}`}>
                           Auto
                         </button>
                       </li>
                       {hlsLevels.map((level, index) => (
                         <li key={level.height}>
-                           <button onClick={() => handleQualityChange(index)} className={`w-full text-left px-2 py-1.5 rounded-md hover:bg-white/10 ${currentHlsLevelIndex === index ? 'font-bold text-cyan-400' : ''}`}>
+                           <button onClick={(e) => { e.stopPropagation(); handleQualityChange(index); }} className={`w-full text-left px-2 py-1.5 rounded-md hover:bg-white/10 ${currentHlsLevelIndex === index ? 'font-bold text-cyan-400' : ''}`}>
                               {level.height}p
                            </button>
                         </li>
@@ -382,18 +370,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ channel }) => {
                   </div>
                 )}
                 {hlsLevels.length > 0 && (
-                  <button onClick={toggleSettingsMenu} className="hover:text-cyan-400 transition-colors" aria-label="Settings">
-                    <CogIcon className={`w-7 h-7 transition-transform duration-300 ${isSettingsMenuOpen ? 'rotate-90' : ''}`} />
+                  <button onClick={e => { e.stopPropagation(); toggleSettingsMenu(); }} className="p-2 hover:text-cyan-400 transition-colors" aria-label="Settings">
+                    <CogIcon className={`w-6 h-6 transition-transform duration-300 ${isSettingsMenuOpen ? 'rotate-90' : ''}`} />
                   </button>
                 )}
               </div>
                {isPiPSupported && (
-                <button onClick={togglePiP} className="hover:text-cyan-400 transition-colors" aria-label="Picture in Picture">
-                  <PictureInPictureIcon className="w-7 h-7" />
+                <button onClick={e => {e.stopPropagation(); togglePiP();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label="Picture in Picture">
+                  <PictureInPictureIcon className="w-6 h-6" />
                 </button>
               )}
-              <button onClick={toggleFullscreen} className="hover:text-cyan-400 transition-colors" aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}>
-                {isFullscreen ? <ArrowsPointingInIcon className="w-7 h-7" /> : <ArrowsPointingOutIcon className="w-7 h-7" />}
+              <button onClick={e => {e.stopPropagation(); toggleFullscreen();}} className="p-2 hover:text-cyan-400 transition-colors" aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}>
+                {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
               </button>
             </div>
           </div>
